@@ -57,6 +57,10 @@ def estaciones(request):
 @api("GET")
 def disponibilidad(request, slug):
     estacion = buscar_estacion(slug)
+    qs = serie(estacion).filter(pm25__isnull=False)
+    if "mes" not in request.GET:
+        meses = qs.datetimes("instante", "month", order="ASC", tzinfo=BOGOTA)
+        return JsonResponse({"meses": [mes.strftime("%Y-%m") for mes in meses]})
     try:
         mes = request.GET.get("mes", "")
         inicio = datetime.strptime(mes, "%Y-%m").replace(tzinfo=BOGOTA)
@@ -65,8 +69,7 @@ def disponibilidad(request, slug):
         fin = (inicio + timedelta(days=32)).replace(day=1)
     except (ValueError, OverflowError):
         raise Problema(400, "mes_invalido", "Usa un mes en formato AAAA-MM.")
-    horas = serie(estacion).filter(instante__gte=inicio, instante__lt=fin,
-        pm25__isnull=False).order_by("instante").values_list("instante", flat=True)
+    horas = qs.filter(instante__gte=inicio, instante__lt=fin).order_by("instante").values_list("instante", flat=True)
     return JsonResponse({"horas": [local(h) for h in horas]})
 
 
