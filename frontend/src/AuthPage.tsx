@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, consumirDestinoAutenticacion, leerDestinoAutenticacion, limpiarParametroNext, write } from './api'
 import type { Session } from './api'
-import { SiteFooter, SiteHeader } from './SiteChrome'
+import { AirbyteLogoImages, SiteFooter, SiteHeader } from './SiteChrome'
 import './Auth.css'
 
 export default function AuthPage({ mode }: { mode: 'login' | 'registro' }) {
@@ -66,7 +66,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'registro' }) {
     <div className="auth-status"><span className="live-dot" /> RED DE MONITOREO · BOGOTÁ D.C.</div>
     <main className="auth-main">
       <div className="auth-card">
-        <a className="auth-brand" href="/"><span className="brand-mark">A</span><span>Air-Byte<small>MONITOREO ATMOSFÉRICO</small></span></a>
+        <a className="auth-brand" href="/" aria-label="Airbyte"><AirbyteLogoImages className="auth-brand-logo" alt="" /></a>
         <h1>{registering ? 'Crea tu cuenta' : 'Bienvenido a Air-Byte'}</h1>
         <p className="auth-intro">{registering
           ? 'Únete a la comunidad y comparte lo que observas en tu localidad.'

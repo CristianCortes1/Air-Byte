@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, consumirDestinoAutenticacion, leerDestinoAutenticacion, limpiarParametroNext } from './api'
 import type { Session } from './api'
-import { SiteFooter, SiteHeader } from './SiteChrome'
+import { AirbyteLogoImages, SiteFooter, SiteHeader } from './SiteChrome'
 import './Auth.css'
 import './Profile.css'
 
@@ -73,7 +73,7 @@ export default function GoogleSignupPage() {
     <div className="auth-status"><span className="live-dot" /> CREACIÓN DE CUENTA · GOOGLE</div>
     <main className="auth-main">
       <div className="auth-card">
-        <a className="auth-brand" href="/"><span className="brand-mark">A</span><span>Air-Byte<small>MONITOREO ATMOSFÉRICO</small></span></a>
+        <a className="auth-brand" href="/" aria-label="Airbyte"><AirbyteLogoImages className="auth-brand-logo" alt="" /></a>
         <h1>Completa tu perfil</h1>
         <p className="auth-intro">Ya verificamos tu cuenta de Google. Personaliza cómo aparecerás en la comunidad y acepta los términos para crear tu cuenta.</p>
 

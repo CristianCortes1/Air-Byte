@@ -59,9 +59,8 @@ export function SiteHeader() {
   }
 
   return <header className="site-header">
-    <a href="/" className="brand" aria-label="Air-Byte, página principal">
-      <span className="brand-mark"><AirMark /></span>
-      <span>Air-Byte<small>BOGOTÁ · PM2,5</small></span>
+    <a href="/" className="brand" aria-label="Airbyte, página principal">
+      <AirbyteLogoImages className="brand-logo" alt="" />
     </a>
     <nav aria-label="Navegación principal">
       <a className={path === '/' ? 'is-active' : ''} href="/#consulta">Calidad del aire</a>
@@ -95,8 +94,7 @@ export function SiteHeader() {
 export function SiteFooter() {
   return <footer className="site-footer">
     <div className="footer-summary">
-      <a href="/" className="brand"><span className="brand-mark"><AirMark /></span>
-        <span>Air-Byte<small>BOGOTÁ · PM2,5</small></span></a>
+      <a href="/" className="brand"><AirbyteLogoImages className="brand-logo" alt="Airbyte" /></a>
       <p>Información horaria y estimaciones de PM2,5 para Bogotá.</p>
       <small>© {COPYRIGHT_YEAR} Air-Byte · Datos abiertos RMCAB — Secretaría Distrital de Ambiente.</small>
     </div>
@@ -107,11 +105,11 @@ export function SiteFooter() {
   </footer>
 }
 
-function AirMark() {
-  return <svg viewBox="0 0 32 32" aria-hidden="true" className="air-mark-svg">
-    <path d="M7 13c4-6 14-6 18 0M9 18c3-4 11-4 14 0M12 23c2-2 6-2 8 0" />
-    <circle cx="16" cy="8" r="1.7" />
-  </svg>
+export function AirbyteLogoImages({ className, alt }: { className: string; alt: string }) {
+  return <>
+    <img className={`${className} brand-logo-light`} src="/airbyte-logo.png" alt={alt} />
+    <img className={`${className} brand-logo-dark`} src="/airbyte-logo-dark.png" alt={alt} />
+  </>
 }
 
 function SunIcon() {

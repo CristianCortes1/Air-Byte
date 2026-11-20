@@ -3,9 +3,8 @@
 .live-dot { width: .55rem; height: .55rem; border-radius: 50%; background: #4edea3; box-shadow: 0 0 12px rgb(78 222 163 / 60%); }
 .auth-main { display: grid; place-items: center; width: min(960px, 92vw); margin: 1.25rem auto 2.5rem; }
 .auth-card { width: min(100%, 590px); padding: clamp(1.35rem, 5vw, 3.2rem); border: 1px solid #28364e; border-radius: .75rem; background: rgb(19 27 46 / 96%); box-shadow: 0 24px 90px rgb(0 0 0 / 30%); }
-.auth-brand { display: flex; align-items: center; justify-content: center; gap: .7rem; color: #e4ecff; text-decoration: none; font-size: 1.55rem; font-weight: 800; line-height: 1.1; }
-.auth-brand small { display: block; margin-top: .25rem; color: #91a5bf; font: 600 .57rem 'JetBrains Mono', monospace; letter-spacing: .12em; }
-.auth-brand .brand-mark { width: 2.8rem; height: 2.8rem; font-size: 1.35rem; }
+.auth-brand { display: flex; justify-content: center; width: min(100%, 15rem); margin: 0 auto; }
+.auth-brand .auth-brand-logo { width: 100%; max-width: 15rem; }
 .auth-card h1 { margin: 1.4rem 0 .4rem; text-align: center; font-size: clamp(1.8rem, 5vw, 2.35rem); letter-spacing: -.04em; }
 .auth-intro { max-width: 27rem; margin: 0 auto 1.5rem; color: #aebbd0; text-align: center; }
 .google-button { display: flex; align-items: center; justify-content: center; gap: .7rem; width: 100%; padding: .9rem; border-color: #303d55; background: #222a3d; font-weight: 600; }
