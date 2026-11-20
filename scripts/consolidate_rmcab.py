@@ -1,8 +1,9 @@
+import argparse
 import csv
 import re
 import zipfile
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -35,7 +36,7 @@ def cell_value(cell, strings):
     return value
 
 
-def read_workbook(path):
+def read_workbook(path, *, recuperar_medianoche=False):
     with zipfile.ZipFile(path) as z:
         strings = shared_strings(z)
         sheet = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
@@ -61,7 +62,10 @@ def read_workbook(path):
         if not dt:
             continue
         try:
-            dt = datetime.strptime(dt, "%d-%m-%Y %H:%M").isoformat(sep=" ")
+            if recuperar_medianoche and dt.endswith(" 24:00"):
+                dt = (datetime.strptime(dt[:10], "%d-%m-%Y") + timedelta(days=1)).isoformat(sep=" ")
+            else:
+                dt = datetime.strptime(dt, "%d-%m-%Y %H:%M").isoformat(sep=" ")
         except ValueError:
             pass
         data.append((dt, {variables[c]: row.get(c, "").strip() for c in variables}))
@@ -79,6 +83,11 @@ def clean_value(value):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--recuperar-medianoche", action="store_true")
+    opciones = parser.parse_args()
+    sufijo = "_v2" if opciones.recuperar_medianoche else ""
+    salida = OUT.with_stem(OUT.stem + sufijo)
     files = sorted(ROOT.rglob("*.xlsx"))
     records = []
     all_vars = set()
@@ -87,7 +96,7 @@ def main():
     variable_missing = Counter()
     variable_total = Counter()
     for path in files:
-        data, variables, file_units = read_workbook(path)
+        data, variables, file_units = read_workbook(path, recuperar_medianoche=opciones.recuperar_medianoche)
         station = path.parent.parent.parent.name
         if station == "RMCAB":
             station = path.parent.parent.name
@@ -110,11 +119,11 @@ def main():
                 row[variable] = clean_value(value)
             records.append(row)
     headers = ["estacion", "fecha_hora", "archivo_origen"] + sorted(all_vars)
-    with OUT.open("w", newline="", encoding="utf-8-sig") as f:
+    with salida.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(records)
-    with QUALITY.open("w", newline="", encoding="utf-8-sig") as f:
+    with QUALITY.with_stem(QUALITY.stem + sufijo).open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow(["indicador", "valor"])
         writer.writerow(["archivos_encontrados", len(files)])
@@ -128,7 +137,7 @@ def main():
             total = variable_total[variable]
             missing = variable_missing[variable]
             writer.writerow([variable, total, missing, round(100 * missing / total, 2) if total else 0])
-    with CATALOG.open("w", newline="", encoding="utf-8-sig") as f:
+    with CATALOG.with_stem(CATALOG.stem + sufijo).open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow(["variable", "unidad"])
         for variable in sorted(all_vars):
@@ -136,7 +145,7 @@ def main():
     print(f"Archivos procesados: {len(files)}")
     print(f"Filas consolidadas: {len(records)}")
     print(f"Variables: {len(all_vars)}")
-    print(f"Salida: {OUT}")
+    print(f"Salida: {salida}")
 
 
 if __name__ == "__main__":
