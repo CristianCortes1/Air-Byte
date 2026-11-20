@@ -26,3 +26,28 @@ class PerfilUsuario(models.Model):
 
     class Meta:
         db_table = "cuentas_perfil_usuario"
+
+
+class SancionCuenta(models.Model):
+    SUSPENSION = "suspension"
+    BANEO = "baneo"
+    TIPOS = [(SUSPENSION, "Suspensión"), (BANEO, "Baneo")]
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                related_name="sanciones_recibidas")
+    tipo = models.CharField(max_length=16, choices=TIPOS)
+    motivo = models.CharField(max_length=500)
+    creada_en = models.DateTimeField(auto_now_add=True)
+    vence_en = models.DateTimeField(null=True, blank=True)
+    activa = models.BooleanField(default=True)
+    moderador = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                  related_name="sanciones_aplicadas", on_delete=models.SET_NULL)
+    levantada_en = models.DateTimeField(null=True, blank=True)
+    levantada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                      related_name="sanciones_levantadas", on_delete=models.SET_NULL)
+
+    class Meta:
+        permissions = [("gestionar_sanciones", "Puede suspender y banear cuentas")]
+        indexes = [models.Index(fields=["usuario", "-creada_en"], name="sancion_usuario_fecha")]
+        constraints = [models.UniqueConstraint(fields=["usuario"], condition=models.Q(activa=True),
+                                                name="sancion_activa_por_usuario")]

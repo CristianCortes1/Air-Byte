@@ -5,6 +5,7 @@ import App from './App.tsx'
 import AuthPage from './AuthPage'
 import GoogleSignupPage from './GoogleSignupPage'
 import AdminUsersPage from './AdminUsersPage'
+import ModerationPage from './ModerationPage'
 import CommunityPage from './CommunityPage'
 import ProfilePage from './ProfilePage'
 import TermsPage from './TermsPage'
@@ -22,6 +23,7 @@ document.title = errorStatus ? `${errorStatus} · Air-Byte`
     : path === '/registro/google' ? 'Completa tu perfil · Air-Byte'
     : path === '/comunidad' ? 'Comunidad · Air-Byte'
     : path === '/administracion' ? 'Administración · Air-Byte'
+    : path === '/moderacion' ? 'Moderación · Air-Byte'
     : path === '/perfil' ? 'Mi perfil · Air-Byte'
     : path === '/terminos' ? 'Términos y condiciones · Air-Byte'
       : 'Air-Byte · Calidad del aire en Bogotá'
@@ -30,6 +32,7 @@ const page = path === '/login' ? <AuthPage mode="login" />
     : path === '/registro/google' ? <GoogleSignupPage />
     : path === '/comunidad' ? <CommunityPage />
     : path === '/administracion' ? <AdminUsersPage />
+    : path === '/moderacion' ? <ModerationPage />
     : path === '/perfil' ? <ProfilePage />
     : path === '/terminos' ? <TermsPage />
       : errorStatus ? <ErrorPage status={errorStatus} />

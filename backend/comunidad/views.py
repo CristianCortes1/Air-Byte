@@ -1,6 +1,7 @@
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
 
 from aire.models import Localidad
 from config.api import Problema, api, autenticado, campo, cuerpo
@@ -68,6 +69,36 @@ def comentarios(request, pk):
         reporte = visible(Reporte.objects.select_for_update().filter(oculto=False), pk)
         comentario = Comentario.objects.create(reporte=reporte, autor=autor, texto=texto)
     return JsonResponse(presentar(comentario), status=201)
+
+
+@api("POST")
+@transaction.atomic
+def ocultar_reporte(request, pk):
+    usuario = autenticado(request)
+    if not usuario.has_perm("comunidad.ocultar_reporte"):
+        raise Problema(403, "permiso_requerido", "Solo una persona moderadora puede ocultar reportes.")
+    reporte = visible(Reporte.objects.select_for_update(), pk)
+    if not reporte.oculto:
+        reporte.oculto = True
+        reporte.ocultado_en = timezone.now()
+        reporte.ocultado_por = usuario
+        reporte.save(update_fields=["oculto", "ocultado_en", "ocultado_por"])
+    return HttpResponse(status=204)
+
+
+@api("POST")
+@transaction.atomic
+def ocultar_comentario(request, pk):
+    usuario = autenticado(request)
+    if not usuario.has_perm("comunidad.ocultar_comentario"):
+        raise Problema(403, "permiso_requerido", "Solo una persona moderadora puede ocultar comentarios.")
+    comentario = visible(Comentario.objects.select_for_update(), pk)
+    if not comentario.oculto:
+        comentario.oculto = True
+        comentario.ocultado_en = timezone.now()
+        comentario.ocultado_por = usuario
+        comentario.save(update_fields=["oculto", "ocultado_en", "ocultado_por"])
+    return HttpResponse(status=204)
 
 
 @api("DELETE")

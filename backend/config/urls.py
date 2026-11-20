@@ -19,6 +19,8 @@ api = [
     path("sesion", cuentas.sesion),
     path("administracion/usuarios", cuentas.administracion_usuarios),
     path("administracion/usuarios/<int:pk>", cuentas.administracion_usuario),
+    path("moderacion/usuarios", cuentas.usuarios_moderacion),
+    path("moderacion/usuarios/<int:pk>/sancion", cuentas.sancionar_usuario),
     path("perfil", cuentas.perfil),
     path("perfil/foto", cuentas.foto_perfil),
     path("perfil/contrasena", cuentas.cambiar_contrasena),
@@ -28,7 +30,9 @@ api = [
     path("auth/google/callback", cuentas.callback_google),
     path("reportes", comunidad.reportes),
     path("reportes/<int:pk>", comunidad.eliminar, {"modelo": Reporte}),
+    path("reportes/<int:pk>/ocultar", comunidad.ocultar_reporte),
     path("reportes/<int:pk>/comentarios", comunidad.comentarios),
+    path("comentarios/<int:pk>/ocultar", comunidad.ocultar_comentario),
     path("comentarios/<int:pk>", comunidad.eliminar, {"modelo": Comentario}),
 ]
 
@@ -37,9 +41,15 @@ def panel_administracion(request):
     return redirect(f"{settings.FRONTEND_URL}/administracion")
 
 
+def panel_moderacion(request):
+    return redirect(f"{settings.FRONTEND_URL}/moderacion")
+
+
 urlpatterns = [
     path("administracion", panel_administracion),
     path("administracion/", panel_administracion),
+    path("moderacion", panel_moderacion),
+    path("moderacion/", panel_moderacion),
     path("admin/", admin.site.urls),
     path("api/v1/", include(api)),
 ]

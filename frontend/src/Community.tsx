@@ -22,6 +22,8 @@ export default function Community({ initialLocality }: { initialLocality: string
     if (status === 'ok') return 'Acceso con Google confirmado.'
     if (status === 'vincular_desde_cuenta') return 'Entra con tu cuenta y elige Vincular Google.'
     if (status === 'cancelado') return 'Acceso con Google cancelado.'
+    if (status === 'cuenta_baneada') return 'Esta cuenta está baneada y no puede iniciar sesión. Si crees que es un error, contacta con el equipo moderador.'
+    if (status === 'cuenta_suspendida') return 'Esta cuenta está suspendida. Inicia sesión con correo y contraseña para consultar los detalles.'
     return status ? 'No se pudo completar el acceso con Google.' : ''
   })
   useEffect(() => {
@@ -71,6 +73,28 @@ export default function Community({ initialLocality }: { initialLocality: string
       refresh(n => n + 1)
     })
   }
+  function hideReport(id: number) {
+    const current = session
+    if (!current?.usuario?.puede_moderar || !window.confirm('¿Ocultar este reporte? Dejará de aparecer en la comunidad, pero se conservará para moderación.')) return
+    void submit(async () => {
+      await write(`/reportes/${id}/ocultar`, 'POST', current.csrf)
+      setThread(undefined)
+      setComments(undefined)
+      setReportPage(1)
+      refresh(n => n + 1)
+      setNotice('El reporte se ocultó de la comunidad y quedó registrado para moderación.')
+    })
+  }
+  function hideComment(id: number) {
+    const current = session
+    if (!current?.usuario?.puede_moderar || !window.confirm('¿Ocultar este comentario? Dejará de aparecer en la comunidad y quedará registrado para moderación.')) return
+    void submit(async () => {
+      await write(`/comentarios/${id}/ocultar`, 'POST', current.csrf)
+      setComments(undefined)
+      refresh(n => n + 1)
+      setNotice('El comentario se ocultó de la comunidad y quedó registrado para moderación.')
+    })
+  }
   return <section id="comunidad">
     <h1>Comunidad por localidad</h1><p>Percepciones de la ciudadanía sobre olores, humo y quemas.</p>
     <div className="panel">
@@ -104,6 +128,7 @@ export default function Community({ initialLocality }: { initialLocality: string
             setThread(thread === report.id ? undefined : report.id); setCommentPage(1); setComments(undefined)
           }}>{thread === report.id ? 'Cerrar comentarios' : 'Ver comentarios'}</button>
           {session?.usuario?.id === report.autor_id && <button onClick={() => remove('/reportes/' + report.id)}>Eliminar reporte</button>}
+          {session?.usuario?.puede_moderar && report.autor_id !== session.usuario.id && <button className="moderate-report" disabled={busy} onClick={() => hideReport(report.id)}>Ocultar reporte</button>}
         </div>
         {thread === report.id && <div className="thread">
           {comments?.resultados.length === 0 && <p>Aún no hay comentarios.</p>}
@@ -111,6 +136,7 @@ export default function Community({ initialLocality }: { initialLocality: string
             <strong>{comment.autor}</strong> · <time dateTime={comment.creado_en}>{hora(comment.creado_en)}</time>
             <p>{comment.texto}</p>
             {session?.usuario?.id === comment.autor_id && <button onClick={() => remove('/comentarios/' + comment.id)}>Eliminar comentario</button>}
+            {session?.usuario?.puede_moderar && comment.autor_id !== session.usuario.id && <button className="moderate-report" disabled={busy} onClick={() => hideComment(comment.id)}>Ocultar comentario</button>}
           </div>)}
           <Pagination current={commentPage} total={comments?.paginas} setPage={setCommentPage} />
           {session?.usuario && <form onSubmit={e => {

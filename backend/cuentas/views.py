@@ -24,7 +24,7 @@ from joserfc.errors import JoseError
 from requests import RequestException
 
 from config.api import Problema, api, autenticado, campo, cuerpo
-from .models import IdentidadGoogle, PerfilUsuario
+from .models import IdentidadGoogle, PerfilUsuario, SancionCuenta
 
 Usuario = get_user_model()
 VERSION_TERMINOS = "2026-11"
@@ -40,7 +40,37 @@ def abrir_sesion(request, usuario):
     request.session.set_expiry(timezone.now() + timedelta(days=14))
 
 
+def expirar_sanciones_vencidas():
+    ahora = timezone.now()
+    with transaction.atomic():
+        ids = list(SancionCuenta.objects.filter(
+            activa=True, tipo=SancionCuenta.SUSPENSION, vence_en__lte=ahora
+        ).values_list("usuario_id", flat=True).distinct())
+        if not ids:
+            return
+        list(Usuario.objects.select_for_update().filter(pk__in=ids).values_list("pk", flat=True))
+        vencidas = SancionCuenta.objects.select_for_update().filter(
+            usuario_id__in=ids, activa=True, tipo=SancionCuenta.SUSPENSION, vence_en__lte=ahora)
+        usuarios = list(vencidas.values_list("usuario_id", flat=True))
+        if usuarios:
+            vencidas.update(activa=False, levantada_en=ahora)
+            Usuario.objects.filter(pk__in=usuarios).update(is_active=True)
+
+
+def sancion_activa(usuario):
+    return SancionCuenta.objects.filter(usuario=usuario, activa=True).order_by("-creada_en").first()
+
+
+def rechazar_por_sancion(sancion):
+    if sancion.tipo == SancionCuenta.BANEO:
+        raise Problema(403, "cuenta_baneada", f"Esta cuenta fue baneada. Motivo: {sancion.motivo}")
+    fecha = timezone.localtime(sancion.vence_en).strftime("%d/%m/%Y %H:%M") if sancion.vence_en else "próximamente"
+    raise Problema(403, "cuenta_suspendida",
+                   f"Esta cuenta está suspendida hasta el {fecha}. Motivo: {sancion.motivo}")
+
+
 def estado(request):
+    expirar_sanciones_vencidas()
     usuario = request.user
     perfil = PerfilUsuario.objects.filter(usuario=usuario).only("foto").first() if usuario.is_authenticated else None
     return JsonResponse({"usuario": {"id": usuario.pk,
@@ -48,6 +78,8 @@ def estado(request):
         "usuario": usuario.username,
         "foto": f"/api/v1/perfil/foto?v={perfil.foto.name.rsplit('/', 1)[-1]}" if perfil and perfil.foto else None,
         "google_vinculado": IdentidadGoogle.objects.filter(usuario=usuario).exists(),
+        "puede_moderar": usuario.has_perm("comunidad.ocultar_reporte"),
+        "puede_moderar_cuentas": usuario.has_perm("cuentas.gestionar_sanciones"),
         "es_admin": usuario.is_superuser} if usuario.is_authenticated else None,
         "csrf": get_token(request), "google_disponible": bool(settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET)})
 
@@ -56,11 +88,17 @@ def estado(request):
 @api("GET", "POST", "DELETE")
 def sesion(request):
     if request.method == "POST":
+        expirar_sanciones_vencidas()
         datos = cuerpo(request)
         identificador = campo(datos, "usuario", 254)
         if "@" in identificador:
             usuario_base = Usuario.objects.filter(email__iexact=identificador).first()
             identificador = usuario_base.username if usuario_base else identificador
+        usuario_base = Usuario.objects.filter(username__iexact=identificador).first()
+        if usuario_base and not usuario_base.is_active:
+            sancion = sancion_activa(usuario_base)
+            if sancion:
+                rechazar_por_sancion(sancion)
         usuario = authenticate(request, username=identificador,
                                password=campo(datos, "contrasena", 1024, recortar=False))
         if usuario is None:
@@ -426,6 +464,8 @@ def administracion_usuario(request, pk):
     with transaction.atomic():
         objetivo = Usuario.objects.select_for_update().get(pk=pk)
         bloquear_ultimo_administrador(objetivo, valores["rol"], valores["is_active"])
+        SancionCuenta.objects.filter(usuario=objetivo, activa=True).update(
+            activa=False, levantada_en=timezone.now(), levantada_por=administrador)
         objetivo.username = valores["username"]
         objetivo.first_name = valores["first_name"]
         objetivo.email = valores["email"]
@@ -442,6 +482,103 @@ def administracion_usuario(request, pk):
         if objetivo.pk == administrador.pk and valores["contrasena"]:
             update_session_auth_hash(request, objetivo)
     return JsonResponse(usuario_admin_json(objetivo))
+
+
+def exigir_moderador_cuentas(request):
+    moderador = autenticado(request)
+    if not moderador.has_perm("cuentas.gestionar_sanciones"):
+        raise Problema(403, "permiso_requerido", "No tienes permiso para moderar cuentas.")
+    return moderador
+
+
+def presentar_cuenta_moderacion(usuario, sancion=None):
+    grupos = {grupo.name for grupo in usuario.groups.all()}
+    rol = "Administrador" if usuario.is_superuser else (
+        "Moderador de contenido" if "Moderadores" in grupos else "Usuario")
+    return {
+        "id": usuario.pk,
+        "usuario": usuario.username,
+        "nombre": usuario.first_name,
+        "correo": usuario.email,
+        "rol": rol,
+        "activo": usuario.is_active,
+        "google_vinculado": getattr(usuario, "google_vinculado", None) if hasattr(usuario, "google_vinculado")
+        else IdentidadGoogle.objects.filter(usuario_id=usuario.pk).exists(),
+        "estado_sancion": sancion.tipo if sancion and sancion.activa else ("inactiva" if not usuario.is_active else "normal"),
+        "motivo_sancion": sancion.motivo if sancion else "",
+        "sancion_hasta": sancion.vence_en.isoformat() if sancion and sancion.vence_en else None,
+        "creado_en": usuario.date_joined.isoformat(),
+    }
+
+
+@never_cache
+@api("GET")
+def usuarios_moderacion(request):
+    exigir_moderador_cuentas(request)
+    expirar_sanciones_vencidas()
+    usuarios = list(Usuario.objects.prefetch_related("groups").annotate(
+        google_vinculado=Exists(IdentidadGoogle.objects.filter(usuario_id=OuterRef("pk")))
+    ).order_by("username")[:500])
+    ids = [usuario.pk for usuario in usuarios]
+    sanciones = SancionCuenta.objects.filter(usuario_id__in=ids).order_by("usuario_id", "-creada_en")
+    ultima_sancion = {}
+    for sancion in sanciones:
+        ultima_sancion.setdefault(sancion.usuario_id, sancion)
+    resultados = [presentar_cuenta_moderacion(usuario, ultima_sancion.get(usuario.pk))
+                  for usuario in usuarios]
+    return JsonResponse({"resultados": resultados, "total": len(resultados), "limite": 500})
+
+
+@never_cache
+@api("POST")
+@transaction.atomic
+def sancionar_usuario(request, pk):
+    moderador = exigir_moderador_cuentas(request)
+    datos = cuerpo(request)
+    accion = datos.get("accion")
+    if accion not in ("suspender", "banear", "levantar"):
+        raise Problema(400, "accion_invalida", "Elige suspender, banear o levantar la sanción.")
+    objetivo = Usuario.objects.select_for_update().filter(pk=pk).first()
+    if not objetivo:
+        raise Problema(404, "usuario_no_encontrado", "No encontramos esa cuenta.")
+    if objetivo.pk == moderador.pk:
+        raise Problema(400, "no_puedes_sancionarte", "No puedes suspender ni banear tu propia cuenta.")
+    if objetivo.is_superuser:
+        raise Problema(403, "cuenta_administradora", "Las cuentas administradoras se gestionan desde el panel de administración.")
+
+    actual = SancionCuenta.objects.select_for_update().filter(usuario=objetivo, activa=True).first()
+    if accion == "levantar":
+        if not actual:
+            raise Problema(409, "sin_sancion_activa", "Esta cuenta no tiene una sanción activa.")
+        actual.activa = False
+        actual.levantada_en = timezone.now()
+        actual.levantada_por = moderador
+        actual.save(update_fields=["activa", "levantada_en", "levantada_por"])
+        objetivo.is_active = True
+        objetivo.save(update_fields=["is_active"])
+    else:
+        motivo = campo(datos, "motivo", 500)
+        if not objetivo.is_active and not actual:
+            raise Problema(409, "cuenta_inactiva", "Esta cuenta ya está desactivada por administración.")
+        if actual:
+            actual.activa = False
+            actual.levantada_en = timezone.now()
+            actual.levantada_por = moderador
+            actual.save(update_fields=["activa", "levantada_en", "levantada_por"])
+        tipo = SancionCuenta.BANEO if accion == "banear" else SancionCuenta.SUSPENSION
+        vence_en = None
+        if tipo == SancionCuenta.SUSPENSION:
+            dias = datos.get("dias", 7)
+            if isinstance(dias, bool) or not isinstance(dias, int) or dias not in (1, 7, 30):
+                raise Problema(400, "duracion_invalida", "La suspensión debe durar 1, 7 o 30 días.")
+            vence_en = timezone.now() + timedelta(days=dias)
+        sancion = SancionCuenta.objects.create(usuario=objetivo, tipo=tipo, motivo=motivo,
+                                                vence_en=vence_en, moderador=moderador)
+        objetivo.is_active = False
+        objetivo.save(update_fields=["is_active"])
+
+    ultima = sancion if accion != "levantar" else actual
+    return JsonResponse(presentar_cuenta_moderacion(objetivo, ultima))
 
 
 @never_cache
@@ -467,6 +604,7 @@ def iniciar_google(request):
 
 
 def obtener_alta_google(request):
+    expirar_sanciones_vencidas()
     pendiente = request.session.get("alta_google_pendiente")
     if not isinstance(pendiente, dict) or pendiente.get("vence", 0) < time.time():
         request.session.pop("alta_google_pendiente", None)
@@ -506,6 +644,9 @@ def alta_google_crear(request):
                 except Usuario.DoesNotExist as error:
                     raise Problema(401, "alta_google_expirada", "Vuelve a continuar con Google para completar tu cuenta.") from error
                 if not usuario.is_active:
+                    sancion = sancion_activa(usuario)
+                    if sancion:
+                        rechazar_por_sancion(sancion)
                     raise Problema(403, "cuenta_inactiva", "Cuenta inactiva.")
                 identidad = IdentidadGoogle.objects.select_for_update().filter(
                     google_sub=sub, usuario=usuario).first()
@@ -557,6 +698,9 @@ def resolver_identidad(claims, vincular_a):
             raise Problema(409, "registro_pendiente", "Completa tu perfil para crear una cuenta.")
         IdentidadGoogle.objects.create(usuario=usuario, google_sub=sub)
     if not usuario.is_active:
+        sancion = sancion_activa(usuario)
+        if sancion:
+            rechazar_por_sancion(sancion)
         raise Problema(403, "cuenta_inactiva", "Cuenta inactiva.")
     return usuario
 
@@ -564,6 +708,7 @@ def resolver_identidad(claims, vincular_a):
 @never_cache
 @api("GET")
 def callback_google(request):
+    expirar_sanciones_vencidas()
     intento = request.session.get("intento_google", {})
     recibido = request.GET.get("state", "")
     resultado = "intento_invalido"
@@ -592,6 +737,9 @@ def callback_google(request):
                 identidad = IdentidadGoogle.objects.select_related("usuario").filter(google_sub=sub).first()
                 if identidad:
                     if not identidad.usuario.is_active:
+                        sancion = sancion_activa(identidad.usuario)
+                        if sancion:
+                            rechazar_por_sancion(sancion)
                         raise Problema(403, "cuenta_inactiva", "Cuenta inactiva.")
                     perfil = PerfilUsuario.objects.filter(usuario=identidad.usuario).only(
                         "consentimiento_aceptado_en").first()
@@ -633,8 +781,14 @@ def callback_google(request):
             resultado = "google_indisponible"
         finally:
             cliente.framework.clear_state_data(request.session, recibido)
-    destino = "/registro/google" if resultado == "registro_pendiente" else (
-        "/administracion" if resultado == "ok" and request.user.is_superuser else f"/comunidad?acceso={resultado}")
+    if resultado == "registro_pendiente":
+        destino = "/registro/google"
+    elif resultado == "ok" and request.user.is_superuser:
+        destino = "/administracion"
+    elif resultado == "ok" and request.user.has_perm("cuentas.gestionar_sanciones"):
+        destino = "/moderacion"
+    else:
+        destino = f"/comunidad?acceso={resultado}"
     respuesta = redirect(destino)
     respuesta["Referrer-Policy"] = "no-referrer"
     return respuesta

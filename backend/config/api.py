@@ -53,4 +53,6 @@ def campo(datos, nombre, maximo, *, recortar=True):
 def autenticado(request):
     if not request.user.is_authenticated:
         raise Problema(401, "sesion_requerida", "Inicia sesión para continuar.")
+    if not request.user.is_active:
+        raise Problema(403, "cuenta_inactiva", "Esta cuenta no puede realizar esta acción.")
     return request.user

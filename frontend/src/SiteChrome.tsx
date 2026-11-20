@@ -39,7 +39,7 @@ export function SiteHeader() {
       const updatedSession = await api<Session>('/sesion')
       setSession(updatedSession)
       notificarSesionActualizada(updatedSession)
-      if (!updatedSession.usuario && ['/administracion', '/perfil'].includes(path)) {
+      if (!updatedSession.usuario && ['/administracion', '/moderacion', '/perfil'].includes(path)) {
         guardarDestinoAutenticacion(path)
         window.location.replace('/login')
       }
@@ -48,7 +48,7 @@ export function SiteHeader() {
       if (current) {
         setSession(current)
         notificarSesionActualizada(current)
-        if (!current.usuario && ['/administracion', '/perfil'].includes(path)) {
+        if (!current.usuario && ['/administracion', '/moderacion', '/perfil'].includes(path)) {
           guardarDestinoAutenticacion(path)
           window.location.replace('/login')
         }
@@ -66,6 +66,7 @@ export function SiteHeader() {
     <nav aria-label="Navegación principal">
       <a className={path === '/' ? 'is-active' : ''} href="/#consulta">Calidad del aire</a>
       <a className={path === '/comunidad' ? 'is-active' : ''} href="/comunidad">Comunidad</a>
+      {session?.usuario?.puede_moderar_cuentas && <a className={path === '/moderacion' ? 'is-active' : ''} href="/moderacion">Moderación</a>}
       {session?.usuario?.es_admin && <a className={path === '/administracion' ? 'is-active' : ''} href="/administracion">Administración</a>}
     </nav>
     <div className="header-actions">

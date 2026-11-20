@@ -1,4 +1,4 @@
-export type User = { id: number; nombre: string; usuario: string; foto: string | null; google_vinculado: boolean; es_admin: boolean }
+export type User = { id: number; nombre: string; usuario: string; foto: string | null; google_vinculado: boolean; puede_moderar: boolean; puede_moderar_cuentas: boolean; es_admin: boolean }
 export type Session = { usuario: User | null; csrf: string; google_disponible: boolean }
 const AUTH_DESTINATION_KEY = 'airbyte-auth-destination'
 const AUTH_DESTINATION_TTL = 30 * 60 * 1000
@@ -8,7 +8,7 @@ function destinoInterno(value: string | null | undefined): string | null {
   try {
     const url = new URL(value, window.location.origin)
     const ruta = url.pathname.replace(/\/+$/, '') || '/'
-    if (url.origin !== window.location.origin || !['/administracion', '/perfil', '/comunidad'].includes(ruta)) return null
+    if (url.origin !== window.location.origin || !['/administracion', '/moderacion', '/perfil', '/comunidad'].includes(ruta)) return null
     return `${ruta}${url.search}${url.hash}`
   } catch {
     return null
