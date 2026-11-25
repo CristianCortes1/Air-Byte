@@ -1,0 +1,14 @@
+﻿indicador,valor
+archivos_encontrados,57
+archivos_procesados,57
+filas_procesadas,324459
+variables_unicas,6
+registros_con_NA,226945
+
+variable,mediciones,faltantes_NA,porcentaje_faltante
+Dir Viento,310339,59593,19.2
+PM10,310339,47598,15.34
+PM2.5,310339,36624,11.8
+Precipitacion,293549,20599,7.02
+Temperatura,201365,3345,1.66
+Vel Viento,310339,59186,19.07
